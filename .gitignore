@@ -1,2 +1,6 @@
+CMakeUserPresets.json
+build/
+out/
+.vs/
 __pycache__/
 *.py[cod]
