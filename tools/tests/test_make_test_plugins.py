@@ -61,6 +61,10 @@ def fake_templates():
         book(0xE3D9B, "NoteSomething", 0, 0, model="Clutter\\Common\\Note01.nif"),  # notes look like this in Skyrim.esm
         rec("KEYM", 0x2BCF5, "SomeKey", ("FULL", LSTRING), ("MODL", mtp.zstring("Clutter\\Key.nif")), ("DATA", bytes(8))),
         rec("LIGH", 0x1D4EC, "Torch01", ("MODL", mtp.zstring("Clutter\\Torch.nif")), ("FULL", LSTRING), ("DATA", light_data(0x2))),
+        # Like Skyrim.esm's QA books: no keywords, string ID 0 for the texts, nothing taught, no value.
+        rec("BOOK", 0xED08F, "QAbookFrench", ("OBND", bytes(12)), ("FULL", LSTRING),
+            ("MODL", mtp.zstring("Clutter\\Books\\BasicBook04.nif")), ("DESC", struct.pack("<I", 0)),
+            ("DATA", mtp.BOOK_DATA.pack(0, 0, 0, 0, 0, 0.0)), ("INAM", struct.pack("<I", 0x153F0)), ("CNAM", struct.pack("<I", 0))),
     ]
 
 
@@ -154,7 +158,8 @@ class GeneratorTest(unittest.TestCase):
                 for sig in mtp.LOCALIZED:
                     data = r.get(sig)
                     if data is not None and not (r.type == "ARMO" and sig == "ONAM"):
-                        self.assertTrue(data.endswith(b"\0") and len(data) > 4, f"{r.edid()} {sig}")
+                        # Inline text, not a 4-byte string ID; the QA copies keep their texts empty.
+                        self.assertTrue(data.endswith(b"\0") and (len(data) > 4 or data == b"\0"), f"{r.edid()} {sig}")
 
     def test_missing_models(self):
         items = self.by_edid("AIMTest_MissingModel.esp")
@@ -192,6 +197,35 @@ class GeneratorTest(unittest.TestCase):
         self.assertEqual(items["AIMTest_Edge_BookTomeKeyword"].keywords(), [mtp.KEYWORD_BOOK, mtp.KEYWORD_SPELL_TOME])
         subs = [s for s, _ in items["AIMTest_Edge_Recipe"].subs]
         self.assertLess(subs.index("KWDA"), subs.index("DATA"), "keywords stay before DATA")
+
+    def test_qa_book_copies(self):
+        items = self.by_edid("AIMTest_Edge.esp")
+        qa_name = "à â é è ê ë ù û ü î ï ô ç".encode("utf-8") + b"\0"
+        clone = items["AIMTest_Edge_QAClone"]
+        self.assertEqual(clone.get("FULL"), qa_name)
+        self.assertEqual((clone.get("DESC"), clone.get("CNAM")), (b"\0", b"\0"))
+        self.assertEqual(clone.keywords(), [])
+        self.assertEqual(mtp.BOOK_DATA.unpack(clone.get("DATA"))[3:], (0, 0, 0.0))
+        self.assertEqual(clone.get("INAM"), struct.pack("<I", 0x153F0))
+        plain = items["AIMTest_Edge_QACloneAscii"]
+        self.assertEqual(plain.get("FULL"), mtp.zstring("AIMTest QA Clone"))
+        self.assertEqual(plain.get("DESC"), b"\0")
+        # Each of the other copies changes one thing.
+        self.assertTrue(items["AIMTest_Edge_QACloneText"].get("DESC").startswith(b"AIMTest QA Clone Text"))
+        self.assertEqual(mtp.BOOK_DATA.unpack(items["AIMTest_Edge_QACloneValue"].get("DATA"))[4:], (5, 1.0))
+        self.assertEqual(mtp.BOOK_DATA.unpack(items["AIMTest_Edge_QACloneTeaches"].get("DATA"))[3], 0xFFFFFFFF)
+        self.assertEqual(items["AIMTest_Edge_QACloneKeyword"].keywords(), [mtp.KEYWORD_BOOK])
+        self.assertEqual(items["AIMTest_Edge_AccentBook"].get("FULL"), qa_name)
+        self.assertEqual(items["AIMTest_Edge_AccentBook"].keywords(), [mtp.KEYWORD_BOOK])
+        self.assertEqual(items["AIMTest_Edge_AccentMisc"].get("FULL"), qa_name)
+        self.assertEqual(items["AIMTest_Edge_Japanese"].get("FULL"), "鉄の剣 AIMTest".encode("utf-8") + b"\0")
+
+    def test_existing_items_keep_their_ids(self):
+        # New edge items go at the end, so the form IDs of older ones never change.
+        items = self.by_edid("AIMTest_Edge.esp")
+        self.assertEqual(items["AIMTest_Edge_Nameless"].form_id, 0x01000800)
+        self.assertEqual(items["AIMTest_Edge_EnchWeapon"].form_id, 0x01000812)
+        self.assertEqual(items["AIMTest_Edge_QAClone"].form_id, 0x01000813)
 
     def test_set_keywords_adds_and_removes_the_subrecords(self):
         r = mtp.Record("BOOK", 1, 0, [("EDID", b"x\0"), ("DATA", bytes(16))])

@@ -17,6 +17,11 @@ namespace aim::game
 		// CheckResourceFiles=1 skips these.
 		constexpr std::array kOfficialPlugins{ "Skyrim.esm"sv, "Update.esm"sv, "Dawnguard.esm"sv, "HearthFires.esm"sv, "Dragonborn.esm"sv };
 
+		// Skyrim.esm's four font test books (QAbookFrench, QABookItalian, QAbookgerman and
+		// QABookSpanish), which the original DLL never lists. It does list exact copies of them in
+		// other plugins, and accented names in every language, so the rule is about these forms.
+		constexpr std::array<RE::FormID, 4> kHiddenForms{ 0x000ED08F, 0x000ED090, 0x000ED091, 0x000ED092 };
+
 		bool IsOfficial(std::string_view a_plugin)
 		{
 			return std::ranges::any_of(kOfficialPlugins, [&](std::string_view a_name) { return text::EqualsIgnoreCase(a_name, a_plugin); });
@@ -96,7 +101,7 @@ namespace aim::game
 					return;
 				}
 				const char* name = a_form.GetName();
-				if (!name || !*name || !a_form.GetPlayable()) {
+				if (!name || !*name || !a_form.GetPlayable() || std::ranges::contains(kHiddenForms, a_form.GetFormID())) {
 					return;
 				}
 				auto& target = _catalog.plugins[plugin->second];

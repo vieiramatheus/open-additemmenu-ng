@@ -11,7 +11,8 @@ For each variant this script:
      game if it hangs;
   4. copies the probe's output and the game's logs into <out>/<variant>/;
   5. uninstalls the variant again.
-At the end it writes <out>/runs.json, one entry per variant.
+After each variant it updates <out>/runs.json, one entry per variant, with the SHA-256 of the
+AddItemMenuSE.dll that answered and of the test plugins (AIMTest_*.esp) installed.
 
 AIMProbe.dll (package 'aimprobe', see the deploy-probe build target) must already be installed.
 The game must not be running, and the deploy record must be in order.
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import shutil
 import subprocess
@@ -60,6 +62,9 @@ VARIANTS: dict[str, dict] = {
     "no-ini": {"delete": [AIM_INI]},
     "russian": {"skyrim_ini": [["General", "sLanguage", "RUSSIAN"]]},
     "no-translation": {"delete": ["game:Data/Interface/translations/AddItemMenuSE_english.txt"]},
+    # Item names with accented letters from the game's own string files. AddItemMenu ships no
+    # French translation, so its labels stay untranslated.
+    "french": {"skyrim_ini": [["General", "sLanguage", "FRENCH"]]},
 }
 
 
@@ -89,6 +94,10 @@ def variant_ini(original: bytes, variant: dict) -> bytes:
     for section, key in variant.get("remove", []):
         data = remove_ini_key(data, section, key)
     return data
+
+
+def file_sha256(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
 
 
 def probe_ini(output: Path) -> str:
@@ -152,13 +161,24 @@ class Runner:
             (folder / "AIMProbe.ini").write_text(probe_ini(output), encoding="utf-8")
             self.deploy("swap", CONFIG_PACKAGE, "--file", str(folder / "AIMProbe.ini"), PROBE_INI,
                         "--note", f"probe run: {name}")
+            setup = self.setup()
             result = self.play(output)
         finally:
             self.collect_logs(folder)
             self.clean_up()
         result.update(self.summarize(output))
         result["variant"] = name
+        result["setup"] = setup
         return result
+
+    def setup(self) -> dict:
+        """What a run's results depend on besides its settings: the AddItemMenuSE.dll that answered
+        and the test plugins. Results compare only when the test plugins are the same."""
+        data = self.game / "Data"
+        return {
+            "dll": file_sha256(data / "SKSE" / "Plugins" / "AddItemMenuSE.dll"),
+            "testPlugins": {path.name: file_sha256(path) for path in sorted(data.glob("AIMTest_*.esp"))},
+        }
 
     def apply(self, name: str, variant: dict, folder: Path) -> None:
         files = []
@@ -251,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
             result = runner.run(name, VARIANTS[name])
             results.append(result)
             print(f"           {result['outcome']}, {result['seconds']} s, {result['calls']} calls, "
-                  f"done={result['done']}", flush=True)
+                  f"done={result['done']}, dll {str(result['setup']['dll'])[:12]}", flush=True)
             summary = args.out / "runs.json"
             previous = json.loads(summary.read_text(encoding="utf-8")) if summary.exists() else {}
             previous[name] = {**result, "finished": f"{datetime.datetime.now():%Y-%m-%dT%H:%M:%S}"}
