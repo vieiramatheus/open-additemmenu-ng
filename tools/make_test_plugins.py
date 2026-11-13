@@ -39,6 +39,9 @@ FORM_VERSION = 44
 FIRST_OBJECT_ID = 0x800
 
 KEYWORD_ORE_INGOT = 0x000914EC  # VendorItemOreIngot
+KEYWORD_BOOK = 0x000937A2       # VendorItemBook
+KEYWORD_SPELL_TOME = 0x000937A5  # VendorItemSpellTome
+KEYWORD_RECIPE = 0x000F5CB0     # VendorItemRecipe
 FORM_GOLD = 0x0000000F
 FORM_LOCKPICK = 0x0000000A
 
@@ -92,8 +95,13 @@ class Record:
         return list(struct.unpack(f"<{len(data) // 4}I", data))
 
     def set_keywords(self, keywords: list[int]) -> None:
-        self.set("KSIZ", struct.pack("<I", len(keywords)))
-        self.set("KWDA", struct.pack(f"<{len(keywords)}I", *keywords))
+        """Replaces the keyword list; adds KSIZ and KWDA before DATA if the record has none."""
+        self.remove("KSIZ", "KWDA")
+        if not keywords:
+            return
+        at = next((i for i, (s, _) in enumerate(self.subs) if s == "DATA"), len(self.subs))
+        self.subs[at:at] = [("KSIZ", struct.pack("<I", len(keywords))),
+                            ("KWDA", struct.pack(f"<{len(keywords)}I", *keywords))]
 
     def to_bytes(self) -> bytes:
         body = bytearray()
@@ -301,6 +309,13 @@ def without_ore_keyword(rec: Record) -> None:
     rec.set_keywords([k for k in rec.keywords() if k != KEYWORD_ORE_INGOT])
 
 
+def keywords_changed(add=(), remove=()):
+    def change(rec: Record) -> None:
+        keywords = [k for k in rec.keywords() if k not in remove]
+        rec.set_keywords(keywords + [k for k in add if k not in keywords])
+    return change
+
+
 ROLE_TAGS = {
     "weapon": "Weapon", "enchanted weapon": "EnchWeapon", "armor": "Armor", "ammo": "Ammo",
     "potion": "Potion", "ingredient": "Ingredient", "misc": "Misc", "ingot": "Ingot", "ore": "Ore",
@@ -340,6 +355,17 @@ def build_all(templates: dict[str, Record]) -> list[tuple[PluginBuilder, str, bo
     edge.add(templates["note"], "AIMTest_Edge_Note", "AIMTest Note", "a note: a book with a note model")
     edge.add(templates["book"], "AIMTest_Edge_NoteType", "AIMTest Note Type Book",
              "an ordinary book with the 'note or scroll' type byte (0xFF)", note_type)
+    # Vanilla recipes are books with VendorItemRecipe instead of VendorItemBook, and the original
+    # DLL lists them as notes. Spell tomes have both the 'teaches spell' flag and a keyword.
+    edge.add(templates["book"], "AIMTest_Edge_Recipe", "AIMTest Recipe",
+             "an ordinary book with VendorItemRecipe instead of VendorItemBook, like vanilla recipes",
+             keywords_changed(add=[KEYWORD_RECIPE], remove=[KEYWORD_BOOK]))
+    edge.add(templates["book"], "AIMTest_Edge_BookAndRecipe", "AIMTest Book And Recipe",
+             "an ordinary book with both VendorItemBook and VendorItemRecipe", keywords_changed(add=[KEYWORD_RECIPE]))
+    edge.add(templates["spell tome"], "AIMTest_Edge_TomeNoKeyword", "AIMTest Tome Without Keyword",
+             "a spell tome without the VendorItemSpellTome keyword", keywords_changed(remove=[KEYWORD_SPELL_TOME]))
+    edge.add(templates["book"], "AIMTest_Edge_BookTomeKeyword", "AIMTest Book With Tome Keyword",
+             "an ordinary book with the VendorItemSpellTome keyword but no spell", keywords_changed(add=[KEYWORD_SPELL_TOME]))
     edge.add(templates["ingot"], "AIMTest_Edge_Ingot", "AIMTest Ingot", "an ingot (VendorItemOreIngot keyword)")
     edge.add(templates["ore"], "AIMTest_Edge_Ore", "AIMTest Ore", "an ore (VendorItemOreIngot keyword)")
     edge.add(templates["ingot"], "AIMTest_Edge_IngotNoKeyword", "AIMTest Ingot Without Keyword",
