@@ -279,7 +279,12 @@ def documents_folder() -> Path:
 
 
 def processes_under(folder: Path) -> list[str]:
-    """Running programs whose executable lives inside folder."""
+    """Running programs whose executable lives inside folder, described for a message."""
+    return [f"{path} (process {pid})" for pid, path in process_ids_under(folder)]
+
+
+def process_ids_under(folder: Path) -> list[tuple[int, str]]:
+    """(process ID, executable path) of the running programs whose executable lives inside folder."""
     if os.name != "nt":
         return []
     try:
@@ -308,7 +313,7 @@ def processes_under(folder: Path) -> list[str]:
                 size = wintypes.DWORD(len(name))
                 if kernel32.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size)):
                     if os.path.normcase(name.value).startswith(base):
-                        found.append(f"{name.value} (process {pid})")
+                        found.append((int(pid), name.value))
             finally:
                 kernel32.CloseHandle(handle)
         return found

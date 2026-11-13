@@ -27,9 +27,10 @@ def light_data(flags):
     return bytes(data)
 
 
-def book(form_id, edid, flags, btype, model="Clutter\\Books\\Book.nif"):
-    return rec("BOOK", form_id, edid, ("FULL", LSTRING), ("MODL", mtp.zstring(model)),
-               ("DESC", LSTRING), ("DATA", bytes([flags, btype]) + bytes(14)), ("CNAM", LSTRING))
+def book(form_id, edid, flags, btype, model="Clutter\\Books\\Book.nif", keywords=(mtp.KEYWORD_BOOK,)):
+    return rec("BOOK", form_id, edid, ("FULL", LSTRING), ("MODL", mtp.zstring(model)), ("DESC", LSTRING),
+               ("KSIZ", struct.pack("<I", len(keywords))), ("KWDA", struct.pack(f"<{len(keywords)}I", *keywords)),
+               ("DATA", bytes([flags, btype]) + bytes(14)), ("CNAM", LSTRING))
 
 
 def fake_templates():
@@ -56,7 +57,7 @@ def fake_templates():
         rec("SLGM", 0x2E4E2, "SoulGemPetty", ("FULL", LSTRING), ("MODL", mtp.zstring("Clutter\\SoulGem.nif")), ("DATA", bytes(8))),
         rec("SCRL", 0x9C46E, "FireballScroll", ("FULL", LSTRING), ("MODL", mtp.zstring("Clutter\\Scroll.nif")), ("DESC", LSTRING)),
         book(0xED617, "BookCommon", 0, 0),
-        book(0x9E2A7, "SpellTomeFlames", 0x04, 0),
+        book(0x9E2A7, "SpellTomeFlames", 0x04, 0, keywords=(mtp.KEYWORD_BOOK, mtp.KEYWORD_SPELL_TOME)),
         book(0xE3D9B, "NoteSomething", 0, 0, model="Clutter\\Common\\Note01.nif"),  # notes look like this in Skyrim.esm
         rec("KEYM", 0x2BCF5, "SomeKey", ("FULL", LSTRING), ("MODL", mtp.zstring("Clutter\\Key.nif")), ("DATA", bytes(8))),
         rec("LIGH", 0x1D4EC, "Torch01", ("MODL", mtp.zstring("Clutter\\Torch.nif")), ("FULL", LSTRING), ("DATA", light_data(0x2))),
@@ -184,6 +185,20 @@ class GeneratorTest(unittest.TestCase):
         self.assertFalse(mtp.light_flags(items["AIMTest_Edge_FixedLight"]) & 0x2)
         self.assertTrue(items["AIMTest_Edge_EnchWeapon"].has("EITM"))
         self.assertFalse(items["AIMTest_Edge_Weapon"].has("EITM"))
+        self.assertEqual(items["AIMTest_Edge_Recipe"].keywords(), [mtp.KEYWORD_RECIPE])
+        self.assertEqual(items["AIMTest_Edge_BookAndRecipe"].keywords(), [mtp.KEYWORD_BOOK, mtp.KEYWORD_RECIPE])
+        self.assertEqual(items["AIMTest_Edge_TomeNoKeyword"].keywords(), [mtp.KEYWORD_BOOK])
+        self.assertEqual(mtp.book_data(items["AIMTest_Edge_TomeNoKeyword"])[0] & 0x04, 0x04)
+        self.assertEqual(items["AIMTest_Edge_BookTomeKeyword"].keywords(), [mtp.KEYWORD_BOOK, mtp.KEYWORD_SPELL_TOME])
+        subs = [s for s, _ in items["AIMTest_Edge_Recipe"].subs]
+        self.assertLess(subs.index("KWDA"), subs.index("DATA"), "keywords stay before DATA")
+
+    def test_set_keywords_adds_and_removes_the_subrecords(self):
+        r = mtp.Record("BOOK", 1, 0, [("EDID", b"x\0"), ("DATA", bytes(16))])
+        r.set_keywords([5, 6])
+        self.assertEqual([s for s, _ in r.subs], ["EDID", "KSIZ", "KWDA", "DATA"])
+        r.set_keywords([])
+        self.assertEqual([s for s, _ in r.subs], ["EDID", "DATA"])
 
     def test_output_is_deterministic(self):
         again = self.tmp / "again"
