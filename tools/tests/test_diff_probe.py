@@ -69,12 +69,12 @@ class DiffTest(unittest.TestCase):
             (self.tmp / name / "runs.json").write_text(json.dumps({variant: {"setup": setup}}), encoding="utf-8")
         return self.tmp / name
 
-    def compare(self, ref_calls, cand_calls, **kwargs):
+    def compare(self, ref_calls, cand_calls, extra=(), **kwargs):
         ref = self.write("ref", ref_calls, **kwargs.pop("ref", {}))
         cand = self.write("cand", cand_calls, **kwargs.pop("cand", {}))
         out = io.StringIO()
         with redirect_stdout(out), redirect_stderr(io.StringIO()):
-            code = diff_probe.main([str(ref), str(cand), "--json", str(self.tmp / "report.json"), "-v"])
+            code = diff_probe.main([str(ref), str(cand), "--json", str(self.tmp / "report.json"), "-v", *extra])
         report = json.loads((self.tmp / "report.json").read_text(encoding="utf-8")) if code != 2 else None
         return code, report, out.getvalue()
 
@@ -115,6 +115,17 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("only in the candidate: B.esp 000802 Axe", self.unknown(report)[0]["detail"])
         self.assertIn("UNKNOWN", out)
+
+    def test_items_the_game_data_changed_are_expected(self):
+        cand = self.basic()
+        cand[4] = get_items("items", 3, lists(SWORD, (0, "B.esp", "000802", "Axe")))
+        changes = self.tmp / "changes.json"
+        changes.write_text(json.dumps({"items": [{"plugin": "B.esp", "id": "000802", "why": "added by a newer master"}]}),
+                           encoding="utf-8")
+        code, report, out = self.compare(self.basic(), cand, extra=["--data-changes", str(changes)])
+        self.assertEqual(code, 0, report)
+        self.assertEqual(self.known(report), ["game-data"])
+        self.assertIn("expected `game-data`", out)
 
     def test_a_different_value_is_unknown(self):
         cand = self.basic()
