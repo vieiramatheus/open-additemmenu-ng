@@ -8,6 +8,10 @@ An open-source replacement for `AddItemMenuSE.dll`, the SKSE plugin of towawot's
 
 You keep the original AddItemMenu 1.14 installed, with its plugin, scripts, translations and settings file, and install this mod after it. It replaces only `SKSE/Plugins/AddItemMenuSE.dll`, and reads the same `AddItemMenuSE.ini` settings, so your existing setup keeps working. The original mod's files are not included here and are never redistributed.
 
+It behaves like the original DLL except for a few deliberate differences, listed in [tests/known-differences.md](tests/known-differences.md).
+
+As with the original, the key that copies an item's name in the container (F1 by default) needs SkyUI, because the mod's script reads SkyUI's container menu. Everything else works with or without SkyUI.
+
 ## Building
 
 You need:
@@ -56,7 +60,15 @@ To build somewhere else or to deploy to a test game, add a `CMakeUserPresets.jso
 
 `tools/deploy.py` installs files into a Skyrim installation and records every change, with backups, so all of it can be undone; `tools/deploy.py --help` explains it. With `AIM_DEPLOY_STATE` set, `cmake --build --preset <yours> --target deploy` builds the DLL and puts it into the game on top of the installed `AddItemMenuSE.dll`; `deploy.py uninstall additemmenu-ng` brings the previous one back.
 
-The deploy script's tests run without the game:
+To compare this DLL with the original, AIMProbe (`probe/`) calls every function in several settings variants and records the answers; `tools/run_probe.py` runs it once per variant. Run it with the original DLL installed, then with this one, and compare the two runs:
+
+```
+python -B tools/diff_probe.py <original run> <this DLL's run>
+```
+
+It accepts the differences in `tests/known-differences.md` and reports anything else.
+
+The tests of these Python tools run without the game:
 
 ```
 python -B -m unittest discover -s tools/tests -t tools/tests
