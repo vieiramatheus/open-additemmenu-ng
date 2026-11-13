@@ -56,8 +56,33 @@ add_commonlibsse_plugin(
 	USE_ADDRESS_LIBRARY
 	SOURCES
 		src/main.cpp
+		src/game/Clipboard.cpp
+		src/game/Index.cpp
+		src/game/Papyrus.cpp
+		src/game/State.cpp
 )
 aim_plugin_settings(AddItemMenuSE)
+# Clipboard.cpp includes <Windows.h>, which must not meet the CommonLibSSE-NG headers.
+set_source_files_properties(src/game/Clipboard.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+target_link_libraries(AddItemMenuSE PRIVATE aim_core user32)
+
+# ---------------------------------------------------------------------------------------
+# Unit tests: 'ctest --preset <preset>' after a build.
+
+if(AIM_BUILD_TESTS)
+	enable_testing()
+	find_package(Catch2 3 CONFIG REQUIRED)
+	add_executable(
+		aim_tests
+		tests/MenuTests.cpp
+		tests/SettingsTests.cpp
+		tests/TextTests.cpp
+		tests/TranslationsTests.cpp
+	)
+	target_link_libraries(aim_tests PRIVATE aim_core Catch2::Catch2WithMain)
+	target_compile_options(aim_tests PRIVATE ${AIM_WARNINGS})
+	add_test(NAME aim_tests COMMAND aim_tests)
+endif()
 
 # ---------------------------------------------------------------------------------------
 # AIMProbe.dll: the test plugin that calls AddItemMenuSE's functions and records the answers

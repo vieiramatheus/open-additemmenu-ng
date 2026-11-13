@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 open-additemmenu-ng contributors. See LICENSE and EXCEPTIONS.md.
 
+#include "game/Papyrus.h"
+#include "game/State.h"
+
 namespace
 {
 	void OnSKSEMessage(SKSE::MessagingInterface::Message* a_message)
 	{
 		if (a_message->type == SKSE::MessagingInterface::kDataLoaded) {
 			SKSE::log::info("Game data loaded");
+			aim::game::State::Get().OnDataLoaded();
 		}
 	}
 }
@@ -22,6 +26,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 		SKSE::GetPluginVersion().string("."),
 		REL::Module::get().version().string("."));
 
+	if (!SKSE::GetPapyrusInterface()->Register(aim::game::papyrus::Register)) {
+		SKSE::log::error("Could not register the native functions");
+	}
 	if (!SKSE::GetMessagingInterface()->RegisterListener(OnSKSEMessage)) {
 		SKSE::log::error("Could not register for SKSE messages");
 	}
