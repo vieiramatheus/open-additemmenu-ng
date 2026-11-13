@@ -2,6 +2,7 @@
 """Tests for the parts of run_probe.py that don't need the game."""
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -45,6 +46,14 @@ class VariantIniTest(unittest.TestCase):
         # The game would resolve it against its own folder.
         with self.assertRaises(run_probe.RunError):
             run_probe.probe_ini(Path("testdata/runs/x/probe.jsonl"))
+
+    def test_file_sha256(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "AIMTest_Edge.esp"
+            path.write_bytes(b"abc")
+            self.assertEqual(run_probe.file_sha256(path),
+                             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+            self.assertIsNone(run_probe.file_sha256(Path(folder) / "missing.esp"))
 
 
 if __name__ == "__main__":
