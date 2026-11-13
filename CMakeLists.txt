@@ -21,20 +21,29 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 
 include(cmake/commonlib.cmake)
 
+set(AIM_WARNINGS /W4 /permissive- /utf-8 /Zc:__cplusplus /external:anglebrackets /external:W0)
+
 # Compiler and linker settings shared by both plugins.
 function(aim_plugin_settings TARGET)
 	target_precompile_headers("${TARGET}" PRIVATE "${PROJECT_SOURCE_DIR}/src/PCH.h")
-	target_compile_options(
-		"${TARGET}" PRIVATE
-		/W4
-		/permissive-
-		/utf-8
-		/Zc:__cplusplus
-		/external:anglebrackets
-		/external:W0
-	)
+	target_compile_options("${TARGET}" PRIVATE ${AIM_WARNINGS})
 	target_link_options("${TARGET}" PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
 endfunction()
+
+# ---------------------------------------------------------------------------------------
+# aim_core: the parts that don't need the game (settings, translations, the text functions and
+# the menu's entries), shared by the DLL and the unit tests.
+
+add_library(
+	aim_core STATIC
+	src/core/Files.cpp
+	src/core/Menu.cpp
+	src/core/Settings.cpp
+	src/core/Text.cpp
+	src/core/Translations.cpp
+)
+target_include_directories(aim_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_options(aim_core PRIVATE ${AIM_WARNINGS})
 
 # ---------------------------------------------------------------------------------------
 # AddItemMenuSE.dll
