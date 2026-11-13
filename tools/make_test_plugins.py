@@ -243,6 +243,9 @@ class Templates:
             "note": self.pick("BOOK", test=lambda rec: b"note" in model(rec)),
             "key": self.pick("KEYM"),
             "light": self.pick("LIGH", "Torch01", test=lambda rec: light_flags(rec) & 0x2),
+            # One of the four test books the original never lists (no keywords, no text, no value).
+            "qa book": self.pick("BOOK", "QAbookFrench",
+                                 test=lambda rec: not rec.keywords() and rec.edid().lower().startswith("qabook")),
         }
 
 
@@ -316,6 +319,25 @@ def keywords_changed(add=(), remove=()):
     return change
 
 
+BOOK_DATA = struct.Struct("<BBHIIf")  # flags, type, padding, skill or spell taught, value, weight
+
+
+def qa_copy(text=False, value=None, weight=None, teaches=None, keywords=()):
+    """Keeps what sets Skyrim.esm's QA books apart, except what the arguments change: no text
+    (Skyrim.esm stores string ID 0, here an empty string), value and weight 0, 0 in the field
+    for what the book teaches (other books have 0xFFFFFFFF), and no keywords."""
+    def change(rec: Record) -> None:
+        if not text:
+            rec.set("DESC", b"\0")
+        rec.set("CNAM", b"\0")
+        flags, btype, pad, taught, old_value, old_weight = BOOK_DATA.unpack(rec.get("DATA"))
+        rec.set("DATA", BOOK_DATA.pack(flags, btype, pad, taught if teaches is None else teaches,
+                                       old_value if value is None else value, old_weight if weight is None else weight))
+        if keywords:
+            rec.set_keywords(list(keywords))
+    return change
+
+
 ROLE_TAGS = {
     "weapon": "Weapon", "enchanted weapon": "EnchWeapon", "armor": "Armor", "ammo": "Ammo",
     "potion": "Potion", "ingredient": "Ingredient", "misc": "Misc", "ingot": "Ingot", "ore": "Ore",
@@ -375,6 +397,26 @@ def build_all(templates: dict[str, Record]) -> list[tuple[PluginBuilder, str, bo
              "the same light, not carryable", not_carryable)
     edge.add(templates["weapon"], "AIMTest_Edge_Weapon", "AIMTest Weapon", "a weapon without an enchantment")
     edge.add(templates["enchanted weapon"], "AIMTest_Edge_EnchWeapon", "AIMTest Enchanted Weapon", "an enchanted weapon")
+    # The original never lists Skyrim.esm's QA books, whose names are only accented letters.
+    # These tell a rule about the name from one about the record.
+    qa_name = "à â é è ê ë ù û ü î ï ô ç"  # QAbookFrench's name
+    edge.add(templates["qa book"], "AIMTest_Edge_QAClone", qa_name, "a copy of QAbookFrench, name included", qa_copy())
+    edge.add(templates["qa book"], "AIMTest_Edge_QACloneAscii", "AIMTest QA Clone", "the same copy with a plain name", qa_copy())
+    edge.add(templates["qa book"], "AIMTest_Edge_QACloneText", "AIMTest QA Clone Text",
+             "the plain-named copy with a book text", qa_copy(text=True))
+    edge.add(templates["qa book"], "AIMTest_Edge_QACloneValue", "AIMTest QA Clone Value",
+             "the plain-named copy with a value and a weight", qa_copy(value=5, weight=1.0))
+    edge.add(templates["qa book"], "AIMTest_Edge_QACloneTeaches", "AIMTest QA Clone Teaches",
+             "the plain-named copy teaching nothing the usual way (0xFFFFFFFF)", qa_copy(teaches=0xFFFFFFFF))
+    edge.add(templates["qa book"], "AIMTest_Edge_QACloneKeyword", "AIMTest QA Clone Keyword",
+             "the plain-named copy with VendorItemBook", qa_copy(keywords=[KEYWORD_BOOK]))
+    edge.add(templates["book"], "AIMTest_Edge_AccentBook", qa_name, "an ordinary book with QAbookFrench's name")
+    edge.add(templates["misc"], "AIMTest_Edge_AccentMisc", qa_name, "a misc item with QAbookFrench's name")
+    edge.add(templates["book"], "AIMTest_Edge_AccentGermanBook", "ä ö ü ß Ä Ö Ü", "an ordinary book with QAbookgerman's name")
+    edge.add(templates["misc"], "AIMTest_Edge_AccentFirst", "Éclair AIMTest", "a name starting with an accented letter")
+    edge.add(templates["misc"], "AIMTest_Edge_AccentInside", "AIMTest Café", "an accented letter inside a name")
+    edge.add(templates["misc"], "AIMTest_Edge_InvertedFirst", "¡AIMTest!", "a name starting with '¡' (UTF-8 C2 A1)")
+    edge.add(templates["misc"], "AIMTest_Edge_Japanese", "鉄の剣 AIMTest", "a name starting with a Japanese character")
 
     empty = PluginBuilder("AIMTest_Empty.esp", masters)
 

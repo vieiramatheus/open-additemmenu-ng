@@ -40,7 +40,7 @@ namespace probe
 
 		constexpr std::string_view kScript = "AddItemMenuSE";
 		// Raise whenever the calls or their inputs change: runs compare only within one plan.
-		constexpr int              kPlanVersion = 2;
+		constexpr int              kPlanVersion = 3;
 		constexpr std::size_t      kListCount = 16;
 		constexpr auto             kCallTimeout = 30s;
 
@@ -54,6 +54,7 @@ namespace probe
 			"Skyrim.esm", "AIMTest", " ",
 			"Тестовый",  // the start of the Cyrillic item's name in AIMTest_Edge.esp
 			"鉄",        // "iron", Japanese
+			"é", "É",    // is case ignored beyond ASCII? ("AIMTest Café", "Éclair AIMTest")
 		};
 
 		const Strings kTranslationKeys{
@@ -66,6 +67,7 @@ namespace probe
 
 		const Strings kClipboardTexts{
 			"Iron Sword", "Железный меч", "鉄の剣", "line one\nline two", "line one\r\nline two", "",
+			"Épée en fer",  // accented, but inside the ANSI code page
 		};
 
 		std::string StringsJson(const Strings& a_strings)
@@ -268,6 +270,8 @@ namespace probe
 
 			// Leaf entries ("name;;parent;;id;;callback;;hasChildren" with hasChildren 0): AIM_GetItems
 			// is called with both their id and their callback, since either may be what a pick reports.
+			// It is also called with the ids of the entries that have children, which the menu never
+			// sends but another mod might.
 			void CollectLeaves(const Variable& a_entries)
 			{
 				const auto array = a_entries.IsArray() ? a_entries.GetArray() : nullptr;
@@ -287,6 +291,13 @@ namespace probe
 							break;
 						}
 						start = end + 2;
+					}
+					if (fields.size() == 5 && fields[4] == "1") {
+						try {
+							_parents.emplace(std::stoi(fields[2]), fields[0]);
+						} catch (const std::exception&) {
+						}
+						continue;
 					}
 					if (fields.size() != 5 || fields[4] != "0") {
 						continue;
@@ -351,6 +362,9 @@ namespace probe
 				}
 				for (const auto& text : kSearchTexts) {
 					AddItems("search", 999, text, true, "");
+				}
+				for (const auto& [index, name] : _parents) {
+					AddItems("parents", index, "", true, "has children: " + name);
 				}
 				// Does AIM_GetItems empty the lists itself? The second call runs without clearing.
 				if (ids.size() >= 2) {
@@ -611,6 +625,7 @@ namespace probe
 			std::int32_t                                          _orderSize{ 0 };
 			std::vector<RE::BGSListForm*>                         _lists;
 			std::map<std::int32_t, Strings>                       _leafSources;
+			std::map<std::int32_t, std::string>                   _parents;  // entries with children, by id
 			std::optional<std::string>                            _savedClipboard;
 			bool                                                  _finished{ false };
 			std::atomic<std::uint32_t>                            _pendingSeq{ 0 };
