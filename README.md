@@ -2,7 +2,7 @@
 
 An open-source replacement for `AddItemMenuSE.dll`, the SKSE plugin of towawot's **AddItemMenu - Ultimate Mod Explorer 1.14**, so that the original mod works again on current Skyrim: Special Edition 1.5.97 and Anniversary Edition 1.6 and 1.7. VR support may follow.
 
-**Status: early development.** All 14 functions the mod's scripts call are in place and pass the comparison runs on Skyrim 1.5.97. Testing on AE continues, and there is no release to install yet.
+**Status: early development.** All 14 functions the mod's scripts call are in place, and one DLL passes the comparison runs on Skyrim SE 1.5.97 and AE 1.6.1170 and 1.7.104. There is no release to install yet.
 
 ## How it will work
 
@@ -66,7 +66,7 @@ To compare this DLL with the original, AIMProbe (`probe/`) calls every function 
 python -B tools/diff_probe.py <original run> <this DLL's run>
 ```
 
-It accepts the differences in `tests/known-differences.md` and reports anything else.
+It accepts the differences in `tests/known-differences.md` and reports anything else. The original DLL only runs on 1.5.97, so runs on other game versions are compared with 1.5.97 results. There the game's own data may differ, and `--data-changes <file>` names the items a newer version's masters changed.
 
 The tests of these Python tools run without the game:
 

@@ -7,6 +7,7 @@ and sort every difference into a known difference or an unknown one.
   diff_probe.py REF CAND --variant default --variant no-ini
   diff_probe.py REF/default/probe.jsonl CAND/default/probe.jsonl           two single runs
   diff_probe.py REF CAND --json report.json                                 also a full report
+  diff_probe.py REF CAND --data-changes changes.json                        another game version's data
 
 How results are compared:
 - Both runs must come from the same probe plan. When runs.json records the test plugins
@@ -18,8 +19,10 @@ How results are compared:
 - Calls repeated with the same arguments are matched in order.
 
 The known differences are described in tests/known-differences.md, each under its name in
-backticks; the rules that recognize them are in this file. Anything else is an unknown
-difference, and the exit code is 1. Exit code 2 means the runs can't be compared.
+backticks; the rules that recognize them are in this file. When the two runs come from game
+versions whose masters differ, --data-changes names the items the game's data changed, and their
+differences count as expected. Anything else is an unknown difference, and the exit code is 1.
+Exit code 2 means the runs can't be compared.
 """
 
 from __future__ import annotations
@@ -37,6 +40,13 @@ KNOWN = {
     "clipboard": "the clipboard keeps text that isn't English",
     "empty-lists": "AIM_GetItems empties the lists for every id",
     "type-menu-for-all": "AllPluginUseItemTypeMenu=1 gives every plugin item-type entries",
+}
+
+# Differences that come from the game rather than the DLL: comparing a run on one game version
+# with golden data from another, the masters themselves may differ. --data-changes lists the items
+# concerned, each with its reason.
+EXPECTED = {
+    "game-data": "items the --data-changes file lists as changed by the game's own data",
 }
 
 Item = tuple  # (plugin file, local form ID, list index)
@@ -223,9 +233,16 @@ def describe_items(items, names: dict, limit: int = 4) -> str:
     return ", ".join(words) + more
 
 
+def load_data_changes(path: Path) -> frozenset:
+    """The items a --data-changes file names: {"items": [{"plugin": ..., "id": ..., "why": ...}]}."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return frozenset((item["plugin"], item["id"].upper()) for item in data.get("items", []))
+
+
 class Comparison:
-    def __init__(self, ref: Run, cand: Run):
+    def __init__(self, ref: Run, cand: Run, data_changes: frozenset = frozenset()):
         self.ref, self.cand = ref, cand
+        self.data_changes = data_changes
         self.report = Report(cand.name)
         self.names: dict = {}
         for run in (ref, cand):
@@ -367,6 +384,10 @@ class Comparison:
         self.check_parts(cand_leaves)
 
     def item_difference(self, where: str, ref: frozenset, cand: frozenset, note: str = "") -> None:
+        changed = {(plugin, form_id) for plugin, form_id, _ in ref ^ cand}
+        if changed and changed <= self.data_changes:
+            self.report.add("game-data", where, describe_items(ref ^ cand, self.names))
+            return
         detail = []
         if ref - cand:
             detail.append("only in the reference: " + describe_items(ref - cand, self.names))
@@ -501,7 +522,8 @@ def print_report(report: Report, verbose: bool, out=print) -> None:
     for note in report.notes:
         out(f"   note: {note}")
     for name, findings in known.items():
-        out(f"   known `{name}` ({KNOWN[name]}): {len(findings)}")
+        kind = "known" if name in KNOWN else "expected"
+        out(f"   {kind} `{name}` ({KNOWN.get(name) or EXPECTED[name]}): {len(findings)}")
         for finding in findings if verbose else []:
             out(f"      {finding.where}: {finding.detail}")
     for finding in report.unknown:
@@ -514,18 +536,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("candidate", type=Path, help="the candidate run (folder or probe.jsonl)")
     parser.add_argument("--variant", action="append", default=[], help="compare only these variants (repeatable)")
     parser.add_argument("--json", type=Path, help="also write every finding to this file")
+    parser.add_argument("--data-changes", type=Path,
+                        help="a JSON file of items the game's own data changed between the two runs' "
+                             "game versions; their differences are expected rather than unknown")
     parser.add_argument("-v", "--verbose", action="store_true", help="list every known difference too")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
         ref, cand = load_runs(args.reference), load_runs(args.candidate)
+        data_changes = load_data_changes(args.data_changes) if args.data_changes else frozenset()
         names = args.variant or [n for n in cand if n in ref]
         missing = [n for n in names if n not in ref or n not in cand]
         if missing or not names:
             raise CompareError("no variant to compare" if not names else "not in both runs: " + ", ".join(missing))
-        reports = [Comparison(ref[name], cand[name]).run() for name in names]
-    except (CompareError, OSError, json.JSONDecodeError) as error:
+        reports = [Comparison(ref[name], cand[name], data_changes).run() for name in names]
+    except (CompareError, OSError, json.JSONDecodeError, KeyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
     for report in reports:
