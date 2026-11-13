@@ -39,12 +39,20 @@ namespace probe
 		using Strings = std::vector<std::string>;
 
 		constexpr std::string_view kScript = "AddItemMenuSE";
+		// Raise whenever the calls or their inputs change: runs compare only within one plan.
+		constexpr int              kPlanVersion = 2;
 		constexpr std::size_t      kListCount = 16;
 		constexpr auto             kCallTimeout = 30s;
 
+		// Papyrus stores strings case-insensitively and keeps the first casing the game created, so
+		// a casing test only works with text the game doesn't already know: "IRON" would reach the
+		// DLL as "iron". "Iron Swo", "ron Sword" and "rON sWO" tell prefix from substring matching
+		// and case-sensitive from case-insensitive matching.
 		const Strings kSearchTexts{
-			"", "iron", "IRON", "Iron Sword", "a", "zzqx", "Dawnguard", "Skyrim.esm", " ",
-			"Железный",  // "iron", Russian
+			"", "iron", "Iron Sword", "Iron Swo", "ron Sword", "rON sWO", "a", "zzqx", "Dawnguard",
+			"aWNgUA",  // part of "Dawnguard.esm" in a casing nothing else uses
+			"Skyrim.esm", "AIMTest", " ",
+			"Тестовый",  // the start of the Cyrillic item's name in AIMTest_Edge.esp
 			"鉄",        // "iron", Japanese
 		};
 
@@ -218,24 +226,28 @@ namespace probe
 					std::format("[{},{},{}]", json::Quote(a_text), StringsJson(a_targets), StringsJson(a_with)) });
 			}
 
+			// Made-up words, none of them in the game and none sharing a word in another casing with
+			// another test, so that every string reaches the DLL exactly as written here.
 			void PlanReplace()
 			{
-				AddReplace("replace", "Iron Sword and Iron Dagger", "Iron", "Steel");  // several occurrences
-				AddReplace("replace", "abc", "x", "y");                                // target not found
-				AddReplace("replace", "abc", "", "y");                                 // empty target
-				AddReplace("replace", "Iron iron IRON", "iron", "X");                  // case differences
-				AddReplace("replace", "", "a", "b");                                   // empty text
-				AddReplace("replace", "aaaa", "aa", "b");                              // overlapping
-				AddReplace("replace", "abc", "b", "");                                 // empty replacement
+				AddReplace("replace", "Zork and Zork again", "Zork", "Bork");          // several occurrences
+				AddReplace("replace", "plimsoll", "xyzzyq", "vvqq");                   // target not found
+				AddReplace("replace", "plimsoll", "", "vvqq");                         // empty target
+				AddReplace("replace", "Qwyzz qwyzz QWYZZ", "qwyzz", "Mx7");            // case differences
+				AddReplace("replace", "", "xyzzyq", "vvqq");                           // empty text
+				AddReplace("replace", "qqqq", "qq", "w7");                             // overlapping
+				AddReplace("replace", "plimsoll", "lim", "");                          // empty replacement
+				AddReplace("replace", "plimsoll", "plimsoll", "zorkmid");              // the whole text
 				AddReplace("replace", "{NAME} copied", "{NAME}", "Iron Sword");        // as ContainerScript uses it
-				AddReplace("replace", "Search: {SEARCH_STRING}", "{SEARCH_STRING}", "iron");
+				AddReplace("replace", "Search: {SEARCH_STRING}", "{SEARCH_STRING}", "zorkmid");
 
-				AddReplaceArray("replace", "a-b-c", { "a", "b" }, { "1", "2" });       // pairs
-				AddReplaceArray("replace", "abc", {}, {});                             // empty arrays
-				AddReplaceArray("replace", "abc", { "a", "b" }, { "1" });              // more targets
-				AddReplaceArray("replace", "abc", { "a" }, { "1", "2" });              // more replacements
-				AddReplaceArray("replace", "ab", { "a", "1" }, { "1", "2" });          // order matters
-				AddReplaceArray("replace", "Iron IRON", { "iron" }, { "X" });          // case differences
+				AddReplaceArray("replace", "plugh-frob-gnusto", { "plugh", "frob" }, { "P1", "F2" });  // pairs
+				AddReplaceArray("replace", "plimsoll", {}, {});                                        // empty arrays
+				AddReplaceArray("replace", "plugh-frob", { "plugh", "frob" }, { "P1" });               // more targets
+				AddReplaceArray("replace", "plugh-frob", { "plugh" }, { "P1", "F2" });                 // more replacements
+				AddReplaceArray("replace", "plugh-frob", { "plugh", "P1" }, { "P1", "F2" });           // order matters
+				AddReplaceArray("replace", "plugh-frob", { "plugh", "xyzzyq" }, { "P1", "F2" });       // one target missing
+				AddReplaceArray("replace", "Wumpus WUMPUS", { "wumpus" }, { "W9" });                   // case differences
 			}
 
 			void PlanEntries()
@@ -399,8 +411,8 @@ namespace probe
 				for (const std::int32_t index : { -1, 100000 }) {
 					AddItems("risky", index, "", true, "");
 				}
-				AddReplace("risky", "abcabc", "abc", "abcabc");             // replacement contains the target
-				AddReplaceArray("risky", "aa", { "a" }, { "aa" });
+				AddReplace("risky", "grue grue", "grue", "grue grue");      // replacement contains the target
+				AddReplaceArray("risky", "grue", { "grue" }, { "grue grue" });
 				Add({ "risky", "AIM_CloseContainerMenu" });                 // with no container open
 			}
 
@@ -583,8 +595,8 @@ namespace probe
 						i, _config.firstList + static_cast<RE::FormID>(i), _lists[i] != nullptr, count);
 				}
 				Write(std::format(
-					R"({{"probe":"AIMProbe","version":"{}","skyrim":"{}","started":"{:%FT%TZ}","cell":{},"clipboard":{},"listPlugin":{},"lists":[{}],"plugins":[{}]}})",
-					SKSE::GetPluginVersion().string("."), REL::Module::get().version().string("."),
+					R"({{"probe":"AIMProbe","version":"{}","plan":{},"skyrim":"{}","started":"{:%FT%TZ}","cell":{},"clipboard":{},"listPlugin":{},"lists":[{}],"plugins":[{}]}})",
+					SKSE::GetPluginVersion().string("."), kPlanVersion, REL::Module::get().version().string("."),
 					std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()),
 					json::Quote(_config.cell), _config.clipboard, json::Quote(_config.listPlugin), lists, plugins));
 			}
@@ -670,6 +682,11 @@ namespace probe
 			}
 		}
 		if (config.output.empty()) {
+			return std::nullopt;
+		}
+		if (!config.output.is_absolute()) {
+			// The game's working folder is the game folder; a relative path would write there.
+			SKSE::log::error("Output in {} must be an absolute path, not {}", a_file.string(), config.output.string());
 			return std::nullopt;
 		}
 		return config;
