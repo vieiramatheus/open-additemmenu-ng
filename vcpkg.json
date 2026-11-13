@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "open-additemmenu-ng",
+  "version-semver": "0.1.0",
+  "description": "Replacement for AddItemMenuSE.dll, the SKSE plugin of AddItemMenu 1.14",
+  "license": "GPL-3.0-or-later",
+  "supports": "windows & x64",
+  "dependencies": [
+    "directxmath",
+    "directxtk",
+    "fmt",
+    "rapidcsv",
+    "spdlog"
+  ]
+}
