@@ -47,6 +47,38 @@ class VariantIniTest(unittest.TestCase):
         with self.assertRaises(run_probe.RunError):
             run_probe.probe_ini(Path("testdata/runs/x/probe.jsonl"))
 
+    def test_catalog_written_by_1_7_is_removed_before_1_6_starts(self):
+        new = b'{\n  "CSV2_016105c0-50a6-4beb-851a-6d0f85c6e5f0" : \n  {\n    "Version" : "1701307962.== Version Number =="\n  }\n}'
+        old = b'{\n  "ccbgssse001-fish" : { "Version" : "1" }\n}'
+        with tempfile.TemporaryDirectory() as folder:
+            appdata = Path(folder)
+            catalog = appdata / "ContentCatalog.txt"
+            keep = appdata / "kept" / "ContentCatalog.removed.txt"
+            for version in ((1, 7, 104, 0), (1, 5, 97, 0), None):
+                catalog.write_bytes(new)
+                self.assertFalse(run_probe.remove_incompatible_catalog(appdata, version, keep), version)
+                self.assertTrue(catalog.exists())
+            catalog.write_bytes(old)
+            self.assertFalse(run_probe.remove_incompatible_catalog(appdata, (1, 6, 1170, 0), keep))
+            self.assertTrue(catalog.exists())
+            catalog.write_bytes(new)
+            self.assertTrue(run_probe.remove_incompatible_catalog(appdata, (1, 6, 1170, 0), keep))
+            self.assertFalse(catalog.exists())
+            self.assertEqual(keep.read_bytes(), new)
+            self.assertFalse(run_probe.remove_incompatible_catalog(appdata, (1, 6, 640, 0), keep), "already gone")
+
+    @unittest.skipUnless(sys.platform == "win32", "reads Windows version resources")
+    def test_exe_version(self):
+        version = run_probe.exe_version(Path(sys.executable))
+        self.assertIsNotNone(version)
+        self.assertEqual(len(version), 4)
+        self.assertGreaterEqual(version[0], 3)
+        self.assertIsNone(run_probe.exe_version(Path(sys.executable).with_name("missing.exe")))
+        with tempfile.TemporaryDirectory() as folder:
+            text = Path(folder) / "not-an-exe.exe"
+            text.write_bytes(b"text")
+            self.assertIsNone(run_probe.exe_version(text))
+
     def test_file_sha256(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "AIMTest_Edge.esp"

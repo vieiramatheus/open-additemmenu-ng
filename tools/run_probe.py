@@ -14,6 +14,10 @@ For each variant this script:
 After each variant it updates <out>/runs.json, one entry per variant, with the SHA-256 of the
 AddItemMenuSE.dll that answered and of the test plugins (AIMTest_*.esp) installed.
 
+Before starting a Skyrim 1.6 game it deletes %LOCALAPPDATA%/Skyrim Special Edition/ContentCatalog.txt
+if Skyrim 1.7 wrote it: 1.6 crashes at startup reading that format. The file is only the game's
+cache of Creations, rebuilt when the Creations menu opens; a copy goes into the variant's folder.
+
 AIMProbe.dll (package 'aimprobe', see the deploy-probe build target) must already be installed.
 The game must not be running, and the deploy record must be in order.
 
@@ -28,6 +32,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -100,6 +105,57 @@ def file_sha256(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
 
 
+def exe_version(path: Path) -> tuple[int, int, int, int] | None:
+    """An executable's file version, such as (1, 6, 1170, 0); None when it can't be read."""
+    if sys.platform != "win32" or not path.is_file():
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    api = ctypes.WinDLL("version")
+    api.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
+    api.GetFileVersionInfoW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
+    api.VerQueryValueW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p),
+                                   ctypes.POINTER(wintypes.UINT)]
+    size = api.GetFileVersionInfoSizeW(str(path), None)
+    buffer = ctypes.create_string_buffer(size) if size else None
+    if not buffer or not api.GetFileVersionInfoW(str(path), 0, size, buffer):
+        return None
+    info, length = ctypes.c_void_p(), wintypes.UINT()
+    if not api.VerQueryValueW(buffer, "\\", ctypes.byref(info), ctypes.byref(length)) or length.value < 16:
+        return None
+    # VS_FIXEDFILEINFO starts with its signature, its structure version, then the file version.
+    fields = ctypes.cast(info, ctypes.POINTER(ctypes.c_uint32 * 4)).contents
+    high, low = fields[2], fields[3]
+    return (high >> 16, high & 0xFFFF, low >> 16, low & 0xFFFF)
+
+
+# Creations catalog entries as Skyrim 1.7 writes them ("CSV2_" plus a GUID). Skyrim 1.6 can't read
+# that catalog and crashes at startup (it parses some versions as numbers, and 1.7 writes
+# placeholders there); 1.5.97 doesn't read the file at all.
+NEW_CATALOG = re.compile(rb'"CSV2_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\s*:', re.I)
+
+
+def remove_incompatible_catalog(appdata: Path, version: tuple | None, keep: Path | None = None) -> bool:
+    """Before a Skyrim 1.6 game starts, deletes a ContentCatalog.txt that 1.7 wrote. The file is only
+    the game's cache of Creations and Creation Club content, rebuilt when the Creations menu opens.
+    A copy goes to `keep`. True if the file was deleted."""
+    if not version or version[:2] != (1, 6):
+        return False
+    catalog = appdata / "ContentCatalog.txt"
+    try:
+        data = catalog.read_bytes()
+    except FileNotFoundError:
+        return False
+    if not NEW_CATALOG.search(data):
+        return False
+    if keep is not None:
+        keep.parent.mkdir(parents=True, exist_ok=True)
+        keep.write_bytes(data)
+    catalog.unlink()
+    return True
+
+
 def probe_ini(output: Path) -> str:
     # The probe runs inside the game, whose working folder is the game folder: a relative path
     # would put the results there, outside the deploy record.
@@ -162,6 +218,7 @@ class Runner:
             self.deploy("swap", CONFIG_PACKAGE, "--file", str(folder / "AIMProbe.ini"), PROBE_INI,
                         "--note", f"probe run: {name}")
             setup = self.setup()
+            catalog_removed = self.clean_catalog(folder / "ContentCatalog.removed.txt")
             result = self.play(output)
         finally:
             self.collect_logs(folder)
@@ -169,7 +226,15 @@ class Runner:
         result.update(self.summarize(output))
         result["variant"] = name
         result["setup"] = setup
+        if catalog_removed:
+            result["catalogRemoved"] = True
         return result
+
+    def clean_catalog(self, keep: Path) -> bool:
+        removed = remove_incompatible_catalog(self.record.roots["appdata"], exe_version(self.game / "SkyrimSE.exe"), keep)
+        if removed:
+            self.print(f"           removed ContentCatalog.txt, which Skyrim 1.6 can't read (copy: {keep})")
+        return removed
 
     def setup(self) -> dict:
         """What a run's results depend on besides its settings: the AddItemMenuSE.dll that answered
@@ -195,7 +260,9 @@ class Runner:
         if settings:
             self.deploy("ini", SKYRIM_INI_PACKAGE, *settings, "--note", f"probe variant: {name}")
 
-    def play(self, output: Path, no_output_after: float = 240, give_up_after: float = 600) -> dict:
+    # A cold start of an AE copy (caches still empty) took over four minutes before the probe wrote
+    # anything, so the limits are generous; a warm start takes about half a minute.
+    def play(self, output: Path, no_output_after: float = 480, give_up_after: float = 900) -> dict:
         started = time.monotonic()
         subprocess.Popen([str(self.game / "skse64_loader.exe")], cwd=self.game)
         while not deploy.process_ids_under(self.game):
@@ -249,10 +316,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, help="folder for the results, one subfolder per variant")
     parser.add_argument("--variant", action="append", default=[], help="run only these variants (repeatable)")
     parser.add_argument("--list", action="store_true", help="list the variants and exit")
+    parser.add_argument("--clean-catalog", action="store_true",
+                        help="only delete a ContentCatalog.txt the installed game can't read, then exit "
+                             "(before starting a Skyrim 1.6 game by hand; a copy goes to <state>/removed/)")
     args = parser.parse_args(argv)
     if args.list:
         for name, variant in VARIANTS.items():
             print(f"{name:30} {json.dumps(variant)}")
+        return 0
+    if args.clean_catalog:
+        if not args.state:
+            parser.error("--clean-catalog needs --state")
+        try:
+            record = deploy.Deployer(args.state)
+        except deploy.DeployError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        keep = args.state.resolve() / "removed" / f"ContentCatalog-{datetime.datetime.now():%Y%m%d-%H%M%S}.txt"
+        version = exe_version(record.roots["game"] / "SkyrimSE.exe")
+        removed = remove_incompatible_catalog(record.roots["appdata"], version, keep)
+        print(f"removed ContentCatalog.txt (copy: {keep})" if removed else "nothing to remove")
         return 0
     if not args.state or not args.out:
         parser.error("--state and --out are required")
