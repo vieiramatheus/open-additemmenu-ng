@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.25)
 
+# The unit tests need Catch2, which vcpkg installs with the manifest's "tests" feature. That has
+# to be chosen before project(), where vcpkg runs.
+option(AIM_BUILD_TESTS "Build the unit tests" ON)
+if(AIM_BUILD_TESTS)
+	list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
 project(
 	open-additemmenu-ng
 	VERSION 0.1.0
