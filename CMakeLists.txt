@@ -21,6 +21,21 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 
 include(cmake/commonlib.cmake)
 
+# Compiler and linker settings shared by both plugins.
+function(aim_plugin_settings TARGET)
+	target_precompile_headers("${TARGET}" PRIVATE "${PROJECT_SOURCE_DIR}/src/PCH.h")
+	target_compile_options(
+		"${TARGET}" PRIVATE
+		/W4
+		/permissive-
+		/utf-8
+		/Zc:__cplusplus
+		/external:anglebrackets
+		/external:W0
+	)
+	target_link_options("${TARGET}" PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
+endfunction()
+
 # ---------------------------------------------------------------------------------------
 # AddItemMenuSE.dll
 
@@ -33,17 +48,28 @@ add_commonlibsse_plugin(
 	SOURCES
 		src/main.cpp
 )
-target_precompile_headers(AddItemMenuSE PRIVATE src/PCH.h)
-target_compile_options(
-	AddItemMenuSE PRIVATE
-	/W4
-	/permissive-
-	/utf-8
-	/Zc:__cplusplus
-	/external:anglebrackets
-	/external:W0
+aim_plugin_settings(AddItemMenuSE)
+
+# ---------------------------------------------------------------------------------------
+# AIMProbe.dll: the test plugin that calls AddItemMenuSE's functions and records the answers
+# (see probe/main.cpp). It is a test tool and is never released.
+
+add_commonlibsse_plugin(
+	AIMProbe
+	NAME "AIMProbe"
+	AUTHOR "open-additemmenu-ng"
+	VERSION "${PROJECT_VERSION}"
+	USE_ADDRESS_LIBRARY
+	SOURCES
+		probe/main.cpp
+		probe/Probe.cpp
+		probe/Json.cpp
+		probe/Win32.cpp
 )
-target_link_options(AddItemMenuSE PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
+aim_plugin_settings(AIMProbe)
+# These two include <Windows.h>, which must not meet the CommonLibSSE-NG headers.
+set_source_files_properties(probe/Json.cpp probe/Win32.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+target_link_libraries(AIMProbe PRIVATE user32)
 
 # ---------------------------------------------------------------------------------------
 # 'deploy': build, then put AddItemMenuSE.dll and its PDB into a test install through
@@ -67,4 +93,20 @@ if(AIM_DEPLOY_STATE)
 		VERBATIM
 	)
 	add_dependencies(deploy AddItemMenuSE)
+
+	# The probe goes in as its own package, 'aimprobe'. Its settings file, which says where to
+	# write the results, is put in place separately for each run.
+	add_custom_target(
+		deploy-probe
+		COMMAND "${Python3_EXECUTABLE}" -B "${PROJECT_SOURCE_DIR}/tools/deploy.py"
+			--state "${AIM_DEPLOY_STATE}"
+			swap aimprobe
+			--file "$<TARGET_FILE:AIMProbe>" "game:Data/SKSE/Plugins/AIMProbe.dll"
+			--file "$<TARGET_PDB_FILE:AIMProbe>" "game:Data/SKSE/Plugins/AIMProbe.pdb"
+			--note "AIMProbe ${PROJECT_VERSION}"
+		COMMENT "Deploying AIMProbe.dll to the test install"
+		USES_TERMINAL
+		VERBATIM
+	)
+	add_dependencies(deploy-probe AIMProbe)
 endif()
