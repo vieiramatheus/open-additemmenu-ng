@@ -11,5 +11,13 @@
     "fmt",
     "rapidcsv",
     "spdlog"
-  ]
+  ],
+  "features": {
+    "tests": {
+      "description": "Unit tests for the parts that don't need the game",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
 }

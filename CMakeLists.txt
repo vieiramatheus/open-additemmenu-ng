@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.25)
 
+# The unit tests need Catch2, which vcpkg installs with the manifest's "tests" feature. That has
+# to be chosen before project(), where vcpkg runs.
+option(AIM_BUILD_TESTS "Build the unit tests" ON)
+if(AIM_BUILD_TESTS)
+	list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
 project(
 	open-additemmenu-ng
 	VERSION 0.1.0
@@ -21,20 +28,29 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 
 include(cmake/commonlib.cmake)
 
+set(AIM_WARNINGS /W4 /permissive- /utf-8 /Zc:__cplusplus /external:anglebrackets /external:W0)
+
 # Compiler and linker settings shared by both plugins.
 function(aim_plugin_settings TARGET)
 	target_precompile_headers("${TARGET}" PRIVATE "${PROJECT_SOURCE_DIR}/src/PCH.h")
-	target_compile_options(
-		"${TARGET}" PRIVATE
-		/W4
-		/permissive-
-		/utf-8
-		/Zc:__cplusplus
-		/external:anglebrackets
-		/external:W0
-	)
+	target_compile_options("${TARGET}" PRIVATE ${AIM_WARNINGS})
 	target_link_options("${TARGET}" PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
 endfunction()
+
+# ---------------------------------------------------------------------------------------
+# aim_core: the parts that don't need the game (settings, translations, the text functions and
+# the menu's entries), shared by the DLL and the unit tests.
+
+add_library(
+	aim_core STATIC
+	src/core/Files.cpp
+	src/core/Menu.cpp
+	src/core/Settings.cpp
+	src/core/Text.cpp
+	src/core/Translations.cpp
+)
+target_include_directories(aim_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_options(aim_core PRIVATE ${AIM_WARNINGS})
 
 # ---------------------------------------------------------------------------------------
 # AddItemMenuSE.dll
@@ -47,8 +63,33 @@ add_commonlibsse_plugin(
 	USE_ADDRESS_LIBRARY
 	SOURCES
 		src/main.cpp
+		src/game/Clipboard.cpp
+		src/game/Index.cpp
+		src/game/Papyrus.cpp
+		src/game/State.cpp
 )
 aim_plugin_settings(AddItemMenuSE)
+# Clipboard.cpp includes <Windows.h>, which must not meet the CommonLibSSE-NG headers.
+set_source_files_properties(src/game/Clipboard.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+target_link_libraries(AddItemMenuSE PRIVATE aim_core user32)
+
+# ---------------------------------------------------------------------------------------
+# Unit tests: 'ctest --preset <preset>' after a build.
+
+if(AIM_BUILD_TESTS)
+	enable_testing()
+	find_package(Catch2 3 CONFIG REQUIRED)
+	add_executable(
+		aim_tests
+		tests/MenuTests.cpp
+		tests/SettingsTests.cpp
+		tests/TextTests.cpp
+		tests/TranslationsTests.cpp
+	)
+	target_link_libraries(aim_tests PRIVATE aim_core Catch2::Catch2WithMain)
+	target_compile_options(aim_tests PRIVATE ${AIM_WARNINGS})
+	add_test(NAME aim_tests COMMAND aim_tests)
+endif()
 
 # ---------------------------------------------------------------------------------------
 # AIMProbe.dll: the test plugin that calls AddItemMenuSE's functions and records the answers

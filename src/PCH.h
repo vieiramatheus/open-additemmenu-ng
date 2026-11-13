@@ -9,4 +9,7 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
+#include <chrono>
+#include <unordered_map>
+
 using namespace std::literals;

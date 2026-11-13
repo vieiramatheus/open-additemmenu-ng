@@ -7,11 +7,13 @@
 #   tools\build.ps1 -Preset local            # a preset from your CMakeUserPresets.json
 #   tools\build.ps1 -Preset local -Target deploy
 #   tools\build.ps1 -Fresh                   # configure from scratch (a new CMake cache)
+#   tools\build.ps1 -Preset local -Test      # then run the unit tests
 
 param(
     [string]$Preset = "release",
     [string]$Target = "",
-    [switch]$Fresh
+    [switch]$Fresh,
+    [switch]$Test
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +36,8 @@ try {
     $buildArgs = @("--build", "--preset", $Preset)
     if ($Target) { $buildArgs += @("--target", $Target) }
     cmake @buildArgs
+    if ($LASTEXITCODE -or -not $Test) { exit $LASTEXITCODE }
+    ctest --preset $Preset
     exit $LASTEXITCODE
 }
 finally {
