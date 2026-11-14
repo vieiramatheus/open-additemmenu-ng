@@ -1,0 +1,83 @@
+[size=5][b]Open AddItemMenu NG - (Open DLL for SE, AE and VR)[/b][/size]
+
+A new, open-source [b]AddItemMenuSE.dll[/b] for towawot's [url=https://www.nexusmods.com/skyrimspecialedition/mods/17563]AddItemMenu - Ultimate Mod Explorer[/url] 1.14, so the original mod works again on current Skyrim: [b]SE 1.5.97, AE 1.6 and 1.7[/b], and, somewhat hopefully in [b]VR[/b].
+
+[b]You still need the original mod.[/b] This replaces only its DLL. AddItemMenu's plugin, scripts, translations and settings file stay as they are, and this download contains none of them.
+
+[i]This is a separate project, not AddItemMenu NG by DarkMatterValkyrie ([b]The first hero to undertake this endeavor[/b]), and it shares no code with it or with the original DLL and not even decompiled any DLL whatsoever.[/i]
+
+[line]
+[size=4][b]Why[/b][/size]
+The original AddItemMenuSE.dll was built for one game version (1.5.97) and doesn't load on the Anniversary Edition. This DLL was written from scratch, from what the original mod's own scripts, settings and translation files show. It is built on CommonLibSSE-NG and the Address Library, so [b]one DLL serves every version[/b] instead of one build per game update.
+
+[line]
+[size=4][b]Requirements[/b][/size]
+[list]
+[*][url=https://www.nexusmods.com/skyrimspecialedition/mods/17563]AddItemMenu - Ultimate Mod Explorer[/url] 1.14, installed[/*]
+[*][url=https://skse.silverlock.org/]SKSE64[/url] for your game version ([url=https://www.nexusmods.com/skyrimspecialedition/mods/30379]AE builds on Nexus[/url]); VR: SKSEVR[/*]
+[*][url=https://www.nexusmods.com/skyrimspecialedition/mods/32444]Address Library for SKSE Plugins[/url]; VR: the VR Address Library for SKSEVR[/*]
+[*][url=https://www.nexusmods.com/skyrimspecialedition/mods/17561]UIExtensions[/url], which AddItemMenu itself requires[/*]
+[*]Recommended: [url=https://www.nexusmods.com/skyrimspecialedition/mods/12604]SkyUI[/url]. The key that copies an item's name in the container (F1) only works with SkyUI, as with the original.[/*]
+[/list]
+
+[line]
+[size=4][b]Installation[/b][/size]
+Install with your mod manager (FOMOD installer) and [b]let this mod overwrite AddItemMenu[/b], so its AddItemMenuSE.dll replaces the original's. The installer offers [b]debug symbols[/b] as an option: they make crash logs name this DLL's functions, which helps a lot when reporting a crash.
+
+[line]
+[size=4][b]Game versions[/b][/size]
+[list]
+[*][b]Tested in game:[/b] 1.5.97, 1.6.1170 and 1.7.104 (Steam). An automated test calls every function the mod uses, in 13 settings and language variants, and compares the answers with the original DLL's; a manual playthrough of the menus confirmed the rest.[/*]
+[*][b]Should work, untested:[/b] GOG 1.6.1179, and other AE versions the Address Library covers.[/*]
+[*][b]Experimental, untested:[/b] VR 1.4.15. AddItemMenu's menus come from UIExtensions, whose behavior in VR is unknown (for me).[/*]
+[/list]
+This is a [b]beta[/b] because the untested versions rely on your feedback: reports from GOG and VR players are very welcome.
+
+[line]
+[size=4][b]Differences from the original DLL[/b][/size]
+It behaves like the original except for these deliberate changes:
+[list]
+[*][b]Parts hold exactly ContainerSize items.[/b] The original sometimes added an empty last part, listed an item in two neighbouring parts, or cut short parts in plugins without item-type entries.[/*]
+[*][b]Sort orders follow the settings file:[/b] the sort key cycles through [OrderSettings] in its numbered order.[/*]
+[*][b]Copying and pasting names keeps text that isn't English[/b] (Russian, Japanese, accented letters), instead of turning it into question marks.[/*]
+[*][b]The item lists are always emptied[/b] before the menu fills them, whatever another mod asks for.[/*]
+[*][b]AllPluginUseItemTypeMenu=1 works:[/b] every plugin gets item-type entries, as the setting's name says. The original ignored it.[/*]
+[/list]
+It reads your AddItemMenuSE.ini and never changes it.
+
+[line]
+[size=4][b]FAQ[/b][/size]
+[b]Do I need to delete AddItemMenu's translation files on AE?[/b]
+No. They load fine on 1.6.1170 and 1.7.104.
+
+[b]My game crashes at startup on 1.6.x after I downgraded from 1.7.[/b]
+That isn't this mod: Skyrim 1.6 can't read the Creations list that 1.7 writes. Delete [i]ContentCatalog.txt[/i] in [i]%LOCALAPPDATA%\Skyrim Special Edition[/i]; it's only a cache, and the game rebuilds it when you open the Creations menu.
+
+[b]The copy key (F1) does nothing in the container.[/b]
+It needs SkyUI. AddItemMenu's own script reads SkyUI's container menu, with this DLL as with the original.
+
+[b]Names in Russian or Japanese show as empty boxes.[/b]
+That's the game's font, which lacks those letters in an English game. The text itself is intact: copied names paste correctly elsewhere.
+
+[line]
+[size=4][b]Reporting a problem[/b][/size]
+Open an issue on [url=https://github.com/vieiramatheus/open-additemmenu-ng/issues]GitHub[/url] with your game version, [i]AddItemMenuSE.log[/i] and [i]skse64.log[/i] from [i]Documents\My Games\Skyrim Special Edition\SKSE[/i], and a crash log if the game crashed (install the optional debug symbols for a readable one).
+
+[line]
+[size=4][b]Source code and license[/b][/size]
+The source is on [url=https://github.com/vieiramatheus/open-additemmenu-ng]GitHub[/url], under GPL-3.0-or-later with an additional permission to combine it with Skyrim, SKSE and Windows. The license file comes with the download.
+
+[line]
+[size=4][b]Credits[/b][/size]
+[list]
+[*][b]towawot[/b], for AddItemMenu, which this only keeps running[/*]
+[*]The [b]CommonLibSSE-NG[/b] contributors (Ryan McKenzie's CommonLibSSE, powerof3, CharmedBaryon, alandtse and many others)[/*]
+[*][b]meh321[/b], for the Address Library[/*]
+[*]The [b]SKSE[/b] team[/*]
+[*][b]expired6978[/b], for UIExtensions[/*]
+[*]The [b]SkyUI[/b] team[/*]
+[/list]
+
+[size=4][b]Permissions:[/b][/size]
+
+[i]"What is better, to receive permissions and the original source code from towawot's or to overcome this problem through great effort? (using reverse engineering techniques and a 20$ claude code subscription)"[/i]
