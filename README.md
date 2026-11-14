@@ -2,7 +2,7 @@
 
 An open-source replacement for `AddItemMenuSE.dll`, the SKSE plugin of towawot's **AddItemMenu - Ultimate Mod Explorer 1.14**, so that the original mod works again on current Skyrim: Special Edition 1.5.97 and Anniversary Edition 1.6 and 1.7. VR support may follow.
 
-**Status: early development.** All 14 functions the mod's scripts call are in place, and one DLL passes the comparison runs on Skyrim SE 1.5.97 and AE 1.6.1170 and 1.7.104. There is no release to install yet.
+**Status: beta (1.0.0-beta-release).** All 14 functions the mod's scripts call are in place, and one DLL passes the comparison runs on Skyrim SE 1.5.97 and AE 1.6.1170 and 1.7.104. GOG builds and VR should work through the same mechanism but are untested; reports are welcome in the issues.
 
 ## How it will work
 
@@ -35,6 +35,18 @@ The source is in two parts:
 
 - `src/core/` holds what doesn't need the game: the settings file, the translation files, the text functions, and the list menu's entries and items.
 - `src/game/` connects that to Skyrim: the item index, the 14 native functions and the clipboard.
+
+### Release archive
+
+The release name lives in two places that must agree: `project(VERSION ...)` with `AIM_RELEASE_LABEL` in `CMakeLists.txt`, and `version-semver` in `vcpkg.json`. The first gives the DLL its version (SKSE sees the numbers; the file properties show the full name).
+
+After a build, `tools/package.py` makes the archive players install:
+
+```
+python -B tools/package.py --build build/release --out <a folder outside the repository>
+```
+
+It refuses to pack a DLL whose version differs from `vcpkg.json`. The archive has a FOMOD installer (`packaging/fomod`): the DLL is always installed, and its PDB is an option, for readable crash logs. The archive also holds `packaging/README.txt`, the license files and the known differences. `packaging/nexus-description.bbcode` is the text of the Nexus page.
 
 ### Unit tests
 
