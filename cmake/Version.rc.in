@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The Windows version resource of AddItemMenuSE.dll, filled in by CMake (configure_file).
+
+1 VERSIONINFO
+FILEVERSION     @PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@, 0
+PRODUCTVERSION  @PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@, 0
+FILEFLAGSMASK   0x3F
+FILEFLAGS       0x0
+FILEOS          0x40004  // VOS_NT_WINDOWS32
+FILETYPE        0x2      // VFT_DLL
+FILESUBTYPE     0x0
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904B0"  // U.S. English, Unicode
+		BEGIN
+			VALUE "CompanyName", "open-additemmenu-ng contributors"
+			VALUE "FileDescription", "Open AddItemMenu NG: AddItemMenuSE.dll for Skyrim SE, AE and VR"
+			VALUE "FileVersion", "@AIM_RELEASE_NAME@"
+			VALUE "InternalName", "AddItemMenuSE"
+			VALUE "LegalCopyright", "GPL-3.0-or-later; source: https://github.com/vieiramatheus/open-additemmenu-ng"
+			VALUE "OriginalFilename", "AddItemMenuSE.dll"
+			VALUE "ProductName", "Open AddItemMenu NG"
+			VALUE "ProductVersion", "@AIM_RELEASE_NAME@"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1200
+	END
+END

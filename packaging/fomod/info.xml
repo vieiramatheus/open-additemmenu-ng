@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later. tools/package.py fills in the version. -->
+<fomod>
+	<Name>Open AddItemMenu NG - (Open DLL for SSE - AE and VR)</Name>
+	<Author>open-additemmenu-ng contributors</Author>
+	<Version MachineVersion="@MACHINE_VERSION@">@VERSION@</Version>
+	<Website>https://github.com/vieiramatheus/open-additemmenu-ng</Website>
+	<Description>A new, open-source AddItemMenuSE.dll for towawot's AddItemMenu 1.14, so the original mod works again on Skyrim SE 1.5.97, AE 1.6 and 1.7, and VR. It replaces only the DLL: install the original mod first, then this one over it.</Description>
+	<Groups>
+		<element>Utilities</element>
+	</Groups>
+</fomod>
