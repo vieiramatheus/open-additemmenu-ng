@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later. Source paths are relative to the archive that
+     tools/package.py builds; destinations are relative to the game's Data folder. -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+	<moduleName>Open AddItemMenu NG - (Open DLL for SSE - AE and VR)</moduleName>
+	<requiredInstallFiles>
+		<file source="SKSE\Plugins\AddItemMenuSE.dll" destination="SKSE\Plugins\AddItemMenuSE.dll" />
+	</requiredInstallFiles>
+	<installSteps order="Explicit">
+		<installStep name="Options">
+			<optionalFileGroups order="Explicit">
+				<group name="Optional files" type="SelectAny">
+					<plugins order="Explicit">
+						<plugin name="Debug symbols (AddItemMenuSE.pdb)">
+							<description>About 25 MB. With it, crash loggers such as Crash Logger SSE AE VR name this DLL's functions in their crash logs instead of showing bare addresses, which makes a crash report much easier to act on. Players don't need it otherwise.
+
+The DLL itself (SKSE\Plugins\AddItemMenuSE.dll) is always installed. It replaces the one from towawot's AddItemMenu 1.14, so let this mod overwrite AddItemMenu.</description>
+							<files>
+								<file source="Optional\SKSE\Plugins\AddItemMenuSE.pdb" destination="SKSE\Plugins\AddItemMenuSE.pdb" />
+							</files>
+							<typeDescriptor>
+								<type name="Optional" />
+							</typeDescriptor>
+						</plugin>
+					</plugins>
+				</group>
+			</optionalFileGroups>
+		</installStep>
+	</installSteps>
+</config>
