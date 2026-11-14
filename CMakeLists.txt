@@ -10,13 +10,22 @@ endif()
 
 project(
 	open-additemmenu-ng
-	VERSION 0.1.0
+	VERSION 1.0.0
 	DESCRIPTION "Replacement for AddItemMenuSE.dll, the SKSE plugin of AddItemMenu 1.14"
-	LANGUAGES CXX
+	LANGUAGES CXX RC
 )
 
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
 	message(FATAL_ERROR "Build in a separate folder: use a preset, for example 'cmake --preset release'.")
+endif()
+
+# The release's name. SKSE only takes numbers (PROJECT_VERSION, reported as 1.0.0.0), so a label
+# such as "beta-release" goes in the DLL's file properties, the archive and the FOMOD. Keep
+# "version-semver" in vcpkg.json the same: tools/package.py checks that the two agree.
+set(AIM_RELEASE_LABEL "beta-release")
+set(AIM_RELEASE_NAME "${PROJECT_VERSION}")
+if(AIM_RELEASE_LABEL)
+	string(APPEND AIM_RELEASE_NAME "-${AIM_RELEASE_LABEL}")
 endif()
 
 set(CMAKE_CXX_STANDARD 23)
@@ -72,6 +81,9 @@ aim_plugin_settings(AddItemMenuSE)
 # Clipboard.cpp includes <Windows.h>, which must not meet the CommonLibSSE-NG headers.
 set_source_files_properties(src/game/Clipboard.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_link_libraries(AddItemMenuSE PRIVATE aim_core user32)
+# The version shown in the DLL's file properties and in crash logs.
+configure_file(cmake/Version.rc.in "${CMAKE_CURRENT_BINARY_DIR}/AddItemMenuSE.rc" @ONLY)
+target_sources(AddItemMenuSE PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/AddItemMenuSE.rc")
 
 # ---------------------------------------------------------------------------------------
 # Unit tests: 'ctest --preset <preset>' after a build.
